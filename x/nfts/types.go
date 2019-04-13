@@ -14,7 +14,7 @@ type NFT struct {
 	Name        string         `json:"name"`
 	Description string         `json:"description"`
 	Image       string         `json:"image"`
-	TokenURI    string         `json:"url"`
+	TokenURI    string         `json:"token_uri"`
 }
 
 // NewNFT creates a new NFT
@@ -59,7 +59,7 @@ func (collection Collection) ValidateBasic() (err error) {
 		return fmt.Errorf("collection name cannot be blank")
 	}
 	if len(collection.NFTs) == 0 {
-		return fmt.Errorf("collection %s cannot be empty")
+		return fmt.Errorf("collection %s cannot be empty", collection.Denom)
 	}
 	return
 }
