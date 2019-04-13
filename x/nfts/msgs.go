@@ -3,11 +3,8 @@ package nfts
 import (
 	"strings"
 
-	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
-
-var cdc = codec.New()
 
 // verify interface at compile time
 // var _ sdk.Msg = &MsgTransferNFT{} // TODO: fix
