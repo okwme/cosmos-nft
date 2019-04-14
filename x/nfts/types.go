@@ -9,7 +9,6 @@ import (
 
 // NFT non fungible token definition
 type NFT struct {
-	ID          uint64         `json:"id"`
 	Owner       sdk.AccAddress `json:"owner"`
 	Name        string         `json:"name"`
 	Description string         `json:"description"`
@@ -18,10 +17,9 @@ type NFT struct {
 }
 
 // NewNFT creates a new NFT
-func NewNFT(ID uint64, owner sdk.AccAddress, tokenURI, description, image, name string,
+func NewNFT(owner sdk.AccAddress, tokenURI, description, image, name string,
 ) NFT {
 	return NFT{
-		ID:          ID,
 		Owner:       owner,
 		Name:        strings.TrimSpace(name),
 		Description: strings.TrimSpace(description),
@@ -30,36 +28,47 @@ func NewNFT(ID uint64, owner sdk.AccAddress, tokenURI, description, image, name 
 	}
 }
 
-// Collection of non fungible tokens
-type Collection struct {
-	Denom string         `json:"denom"`
-	NFTs  map[uint64]NFT `json:"nfts"`
+// EditMetadata edits metadata of an nft
+func (nft NFT) EditMetadata(name, description, image, tokenURI string) NFT {
+	nft.Name = name
+	nft.Description = description
+	nft.Image = image
+	nft.TokenURI = tokenURI
+	return nft
 }
+
+// Denom is a string
+type Denom string
+
+// TokenID is a uint64
+type TokenID uint64
+
+// Owner of non fungible tokens
+type Owner map[Denom][]TokenID
+
+// NewOwner returns a new empty owner
+func NewOwner() Owner {
+	return map[Denom][]TokenID{}
+}
+
+// Collection of non fungible tokens
+type Collection map[TokenID]NFT
 
 // NewCollection creates a new NFT Collection
-func NewCollection(denom string) Collection {
-	return Collection{
-		Denom: strings.TrimSpace(denom),
-		NFTs:  make(map[uint64]NFT),
-	}
+func NewCollection() Collection {
+	return make(map[TokenID]NFT)
 }
 
-// GetNFT gets a NFT
-func (collection Collection) GetNFT(ID uint64) (nft NFT, err error) {
-	nft, ok := collection.NFTs[ID]
+// GetNFT gets a NFT from the collection
+func (collection Collection) GetNFT(denom Denom, id TokenID) (nft NFT, err error) {
+	nft, ok := collection[id]
 	if !ok {
-		return nft, fmt.Errorf("collection %s doesn't contain an NFT with ID %d", collection.Denom, ID)
+		return nft, fmt.Errorf("collection %s doesn't contain an NFT with TokenID %d", denom, id)
 	}
 	return
 }
 
 // ValidateBasic validates a Collection
 func (collection Collection) ValidateBasic() (err error) {
-	if collection.Denom == "" {
-		return fmt.Errorf("collection name cannot be blank")
-	}
-	if len(collection.NFTs) == 0 {
-		return fmt.Errorf("collection %s cannot be empty", collection.Denom)
-	}
 	return
 }

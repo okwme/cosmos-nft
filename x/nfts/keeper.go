@@ -11,7 +11,7 @@ import (
 
 // Keeper maintains the link to data storage and exposes getter/setter methods for the various parts of the state machine
 type Keeper struct {
-	coinKeeper bank.Keeper
+	bk bank.Keeper
 
 	storeKey sdk.StoreKey // Unexposed key to access store from sdk.Context
 
@@ -21,39 +21,50 @@ type Keeper struct {
 // NewKeeper creates new instances of the nft Keeper
 func NewKeeper(coinKeeper bank.Keeper, storeKey sdk.StoreKey, cdc *codec.Codec) Keeper {
 	return Keeper{
-		coinKeeper: coinKeeper,
-		storeKey:   storeKey,
-		cdc:        cdc,
+		bk:       coinKeeper,
+		storeKey: storeKey,
+		cdc:      cdc,
 	}
 }
 
-// GetNFT gets the entire NFT metadata struct for an ID
-func (k Keeper) GetNFT(ctx sdk.Context, denom string, ID uint64,
+// GetNFT gets the entire NFT metadata struct for a TokenID
+func (k Keeper) GetNFT(ctx sdk.Context, denom Denom, id TokenID,
 ) (nft NFT, err error) {
-	collection, err := k.GetCollection(ctx, denom)
-	if err != nil {
-		return
+	collection, found := k.GetCollection(ctx, denom)
+	if !found {
+		return ErrUnknownCollection(fmt.Sprintf("collection of %s doesn't exist", denom))
 	}
-	nft, err = collection.GetNFT(ID)
+	nft, err = collection.GetNFT(denom, id)
 	if err != nil {
 		return
 	}
 	return
 }
 
-// SetNFT sets the entire NFT metadata struct for an ID
-func (k Keeper) SetNFT(ctx sdk.Context, denom string, nft NFT) (err error) {
-	collection, err := k.GetCollection(ctx, denom)
-	if err != nil {
-		return err
+// SetNFT sets an NFT into the store
+func (k Keeper) SetNFT(ctx sdk.Context, denom Denom, nft NFT) (err sdk.Error) {
+	collection, found := k.GetCollection(ctx, denom)
+	if !found {
+		return ErrUnknownCollection(fmt.Sprintf("collection of %s doesn't exist", denom))
 	}
 	collection.NFTs[nft.ID] = nft
 	k.SetCollection(ctx, denom, collection)
 	return
 }
 
+// BurnNFT deletes an existing NFT from store
+func (k Keeper) BurnNFT(ctx sdk.Context, denom Denom, id TokenID) (err sdk.Error) {
+	collection, found := k.GetCollection(ctx, denom)
+	if !found {
+		return ErrUnknownCollection(fmt.Sprintf("collection of %s doesn't exist", denom))
+	}
+	delete(collection.NFTs, id)
+	k.SetCollection(ctx, denom, collection)
+	return
+}
+
 // GetCollections returns all the NFTs collections
-func (k Keeper) GetCollections(ctx sdk.Context) (collections []Collection) {
+func (k Keeper) GetCollections(ctx sdk.Context) (collections map[Denom]Collection) {
 	store := ctx.KVStore(k.storeKey)
 	iterator := sdk.KVStorePrefixIterator(store, collectionKeyPrefix)
 	defer iterator.Close()
@@ -61,30 +72,77 @@ func (k Keeper) GetCollections(ctx sdk.Context) (collections []Collection) {
 	var collection Collection
 	for ; iterator.Valid(); iterator.Next() {
 		err := k.cdc.UnmarshalBinaryLengthPrefixed(iterator.Value(), &collection)
+		denom := string(iterator.Value()[1:])
 		if err != nil {
 			panic(err)
 		}
-		collections = append(collections, collection)
+		collections[denom] = collection
 	}
 	return
 }
 
 // GetCollection returns a collection of NFTs
-func (k Keeper) GetCollection(ctx sdk.Context, denom string,
-) (collection Collection, err error) {
+func (k Keeper) GetCollection(ctx sdk.Context, denom Denom,
+) (collection Collection, found bool) {
 	store := ctx.KVStore(k.storeKey)
-	b := store.Get(GetCollectionKey(denom))
+	b := store.Get([]byte(denom))
 	if b == nil {
-		err = fmt.Errorf("collection of %s doesn't exist", denom)
-		return
+		return nil, false
 	}
 	k.cdc.MustUnmarshalBinaryLengthPrefixed(b, collection)
-	return
+	return collection, true
 }
 
 // SetCollection sets the entire collection of a single denom
-func (k Keeper) SetCollection(ctx sdk.Context, denom string, collection Collection) {
+func (k Keeper) SetCollection(ctx sdk.Context, denom Denom, collection Collection) {
 	store := ctx.KVStore(k.storeKey)
 	collectionKey := GetCollectionKey(denom)
 	store.Set(collectionKey, k.cdc.MustMarshalBinaryBare(collection))
+}
+
+// AddToOwner adds an NFT to owner
+func (k Keeper) AddToOwner(ctx sdk.Context, denom Denom, id TokenID, nft NFT) (err sdk.Error) {
+	store := ctx.KVStore(k.storeKey)
+	owner, found = k.GetOwner(ctx, nft.Owner)
+	if !found {
+		owner := NewOwner()
+	}
+	owner[denom] = append(owner[denom], id)
+	k.setOwner(ctx, nft.Owner, owner)
+}
+
+// SetOwner sets an owner
+func (k Keeper) SetOwner(ctx sdk.Context, address sdk.AccAddress, owner Owner) {
+	store := ctx.KVStore(k.storeKey)
+	ownerKey := GetOwnerKey(address)
+	store.Set(ownerKey, k.cdc.MustMarshalBinaryBare(owner))
+}
+
+// GetOwner returns a owner
+func (k Keeper) GetOwner(ctx sdk.Context, address sdk.AccAddress,
+) (owner Owner, found bool) {
+	store := ctx.KVStore(k.storeKey)
+	b := store.Get(GetOwnerKey(address))
+	if b == nil {
+		return nil, false
+	}
+	k.cdc.MustUnmarshalBinaryLengthPrefixed(b, owner)
+	return owner, true
+}
+
+// GetOwners returns all the NFTs owners
+func (k Keeper) GetOwners(ctx sdk.Context) (owners map[sdk.AccAddress]Owner) {
+	store := ctx.KVStore(k.storeKey)
+	iterator := sdk.KVStorePrefixIterator(store, ownerKeyPrefix)
+	defer iterator.Close()
+
+	var owner Owner
+	for ; iterator.Valid(); iterator.Next() {
+		err := k.cdc.UnmarshalBinaryLengthPrefixed(iterator.Value(), &owner)
+		if err != nil {
+			panic(err)
+		}
+		owners = append(owners, owner)
+	}
+	return
 }

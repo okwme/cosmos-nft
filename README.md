@@ -78,66 +78,8 @@ The Metadata spec is actually separated from the required fields of the NFT. Thi
 
 ### Types
 
-```go
-type NFT interface {
-    map[type]type
-}
-```
-
-```go
-type NftMetadata struct {
-    Description string `json:"description"`
-    Image string `json:"image"`
-    TokenURI string  `json:"url"`
-}
-```
-
-```go
-type NFT struct {
-    Name string `json:"name"`
-    Denom string `json:"denom"`
-    Metadata NftMetadata `json:"metadata"`
-    Owners map[sdk.AccAddress]uint64 `json:"owners"`
-}
-```
-
-```go
-type NFTs map[denom string][]NFT
-```
-
-
-
-
 ### Messages
 
-
-
-
- ### Keeepers
-
- ```go
- (keeper Keeper) GetNFTsByDenom(ctx sdk.Context, denom string, uint64 ID) (nft NFT, err error) {
-    store := ctx.KVStore(keeper.storeKey)
-    b := store.Get(GetNFTKey(denom, ID))
-    if b == nil {
-        err = fmt.Errorf("NFT with ID %s doesn't exist", ID)
-        return
-    }
-    keeper.cdc.MustUnmarshalBinaryLengthPrefixed(b, nft)
- }
-```
-
- ```go
- (keeper Keeper) SetNFT(ctx sdk.Context, nft NFT) {
-    store := ctx.KVStore(keeper.storeKey)
-    nftKey := GetNFTKey(nft.ID)
-    b := keeper.cdc.MustMarshalBinaryLengthPrefixed(nft)
-    store.Set(nftKey, b)
- }
-```
+### Keeepers
 
 ### Queriers
-
- * getName()
- * getSymbol()
- * getMetadata()

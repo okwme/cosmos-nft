@@ -1,5 +1,7 @@
 package nfts
 
+import sdk "github.com/cosmos/cosmos-sdk/types"
+
 const (
 	// ModuleName is the name of the module
 	ModuleName = "nfts"
@@ -13,9 +15,15 @@ const (
 
 var (
 	collectionKeyPrefix = []byte{0x00}
+	ownerKeyPrefix      = []byte{0x01}
 )
 
 // GetCollectionKey gets the key of a collection
-func GetCollectionKey(denom string) []byte {
+func GetCollectionKey(denom Denom) []byte {
 	return append(collectionKeyPrefix, []byte(denom)...)
+}
+
+// GetOwnerKey gets the key of a collection
+func GetOwnerKey(address sdk.AccAddress) []byte {
+	return append(ownerKeyPrefix, address.Bytes()...)
 }
