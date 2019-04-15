@@ -40,11 +40,43 @@ func (nft NFT) EditMetadata(name, description, image, tokenURI string) NFT {
 // Denom is a string
 type Denom string
 
+// TrimSpace trims space around a Denom
+func (denom Denom) TrimSpace() Denom {
+	return Denom(strings.TrimSpace(string(denom)))
+}
+
 // TokenID is a uint64
 type TokenID uint64
 
+// Empty detects whether a TokenID is empty
+func (id *TokenID) Empty() bool {
+	return id == nil
+}
+
 // Owner of non fungible tokens
 type Owner map[Denom][]TokenID
+
+// RemoveNFT removes a NFT TokenID from an owner mapping
+func (owner Owner) RemoveNFT(denom Denom, id TokenID) (err sdk.Error) {
+
+	// find the index of the NFT as i
+	i := 0
+	for _, _id := range owner[denom] {
+		if _id == id {
+			break
+		}
+		i++
+	}
+
+	// NFT Not Found (i will equal len of the array if break was never called)
+	if i == len(owner[denom]) {
+		return ErrInvalidNFT(DefaultCodespace)
+	}
+
+	// remove the ID from the slice
+	owner[denom] = append(owner[denom][:i], owner[denom][i+1:]...)
+	return
+}
 
 // NewOwner returns a new empty owner
 func NewOwner() Owner {
@@ -60,15 +92,15 @@ func NewCollection() Collection {
 }
 
 // GetNFT gets a NFT from the collection
-func (collection Collection) GetNFT(denom Denom, id TokenID) (nft NFT, err error) {
+func (collection Collection) GetNFT(denom Denom, id TokenID) (nft NFT, err sdk.Error) {
 	nft, ok := collection[id]
 	if !ok {
-		return nft, fmt.Errorf("collection %s doesn't contain an NFT with TokenID %d", denom, id)
+		return nft, ErrUnknownCollection(DefaultCodespace, fmt.Sprintf("collection %s doesn't contain an NFT with TokenID %d", denom, id))
 	}
 	return
 }
 
 // ValidateBasic validates a Collection
-func (collection Collection) ValidateBasic() (err error) {
+func (collection Collection) ValidateBasic() (err sdk.Error) {
 	return
 }

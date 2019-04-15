@@ -6,12 +6,12 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
+// RouterKey is nfts
+var RouterKey = "nfts"
+
 /* --------------------------------------------------------------------------- */
 // MsgTransferNFT
 /* --------------------------------------------------------------------------- */
-
-// verify interface at compile time
-// var _ sdk.Msg = &MsgTransferNFT{} // TODO: fix
 
 // MsgTransferNFT defines a TransferNFT message
 type MsgTransferNFT struct {
@@ -22,7 +22,7 @@ type MsgTransferNFT struct {
 }
 
 // NewMsgTransferNFT is a constructor function for MsgSetName
-func NewMsgTransferNFT(sender, recipient sdk.AccAddress, denom string, id TokenID,
+func NewMsgTransferNFT(sender, recipient sdk.AccAddress, denom Denom, id TokenID,
 ) MsgTransferNFT {
 	return MsgTransferNFT{
 		Sender:    sender,
@@ -32,19 +32,20 @@ func NewMsgTransferNFT(sender, recipient sdk.AccAddress, denom string, id TokenI
 	}
 }
 
-// Route Implements Msg TODO: fix
-// func (msg MsgTransferNFT) Route() string { return RouterKey }
+// Route Implements Msg
+func (msg MsgTransferNFT) Route() string { return RouterKey }
 
 // Type Implements Msg
 func (msg MsgTransferNFT) Type() string { return "transfer_nft" }
 
 // ValidateBasic Implements Msg.
 func (msg MsgTransferNFT) ValidateBasic() sdk.Error {
-	if strings.TrimSpace(msg.Denom) == "" {
+	if strings.TrimSpace(string(msg.Denom)) == "" {
 		return ErrInvalidCollection(DefaultCodespace)
 	}
+
 	if msg.ID.Empty() {
-		return ErrInvalidNFT()
+		return ErrInvalidNFT(DefaultCodespace)
 	}
 	if msg.Sender.Empty() {
 		return sdk.ErrInvalidAddress("invalid sender address")
@@ -87,7 +88,7 @@ func NewMsgEditNFTMetadata(owner sdk.AccAddress, id TokenID, denom Denom, tokenU
 	return MsgEditNFTMetadata{
 		Owner:       owner,
 		ID:          id,
-		Denom:       strings.TrimSpace(denom),
+		Denom:       denom.TrimSpace(),
 		Name:        strings.TrimSpace(name),
 		Description: strings.TrimSpace(description),
 		Image:       strings.TrimSpace(image),
@@ -95,8 +96,8 @@ func NewMsgEditNFTMetadata(owner sdk.AccAddress, id TokenID, denom Denom, tokenU
 	}
 }
 
-// Route Implements Msg TODO: fix
-// func (msg MsgEditNFTMetadata) Route() string { return RouterKey }
+// Route Implements Msg
+func (msg MsgEditNFTMetadata) Route() string { return RouterKey }
 
 // Type Implements Msg
 func (msg MsgEditNFTMetadata) Type() string { return "edit_metadata" }
@@ -104,7 +105,7 @@ func (msg MsgEditNFTMetadata) Type() string { return "edit_metadata" }
 // ValidateBasic Implements Msg.
 func (msg MsgEditNFTMetadata) ValidateBasic() sdk.Error {
 	if msg.ID.Empty() {
-		return ErrInvalidNFT()
+		return ErrInvalidNFT(DefaultCodespace)
 	}
 	if msg.Owner.Empty() {
 		return sdk.ErrInvalidAddress("invalid owner address")
@@ -154,22 +155,22 @@ func NewMsgMintNFT(sender, recipient sdk.AccAddress, id TokenID, denom Denom, na
 	}
 }
 
-// Route Implements Msg TODO: fix
-// func (msg MsgMintNFT) Route() string { return RouterKey }
+// Route Implements Msg
+func (msg MsgMintNFT) Route() string { return RouterKey }
 
 // Type Implements Msg
 func (msg MsgMintNFT) Type() string { return "mint_nft" }
 
 // ValidateBasic Implements Msg.
 func (msg MsgMintNFT) ValidateBasic() sdk.Error {
-	if strings.TrimSpace(msg.Denom) == "" {
+	if msg.Denom.TrimSpace() == "" {
 		return ErrInvalidCollection(DefaultCodespace)
 	}
 	if msg.Sender.Empty() {
 		return sdk.ErrInvalidAddress("invalid sender address")
 	}
 	if msg.ID.Empty() {
-		return ErrInvalidNFT()
+		return ErrInvalidNFT(DefaultCodespace)
 	}
 	return nil
 }
@@ -206,19 +207,19 @@ func NewMsgBurnNFT(sender sdk.AccAddress, id TokenID, denom Denom,
 	}
 }
 
-// Route Implements Msg TODO: fix
-// func (msg MsgBurnNFT) Route() string { return RouterKey }
+// Route Implements Msg
+func (msg MsgBurnNFT) Route() string { return RouterKey }
 
 // Type Implements Msg
 func (msg MsgBurnNFT) Type() string { return "burn_nft" }
 
 // ValidateBasic Implements Msg.
 func (msg MsgBurnNFT) ValidateBasic() sdk.Error {
-	if strings.TrimSpace(msg.Denom) == "" {
+	if msg.Denom.TrimSpace() == "" {
 		return ErrInvalidCollection(DefaultCodespace)
 	}
-	if msg.ID.empty() {
-		return ErrInvalidNFT()
+	if msg.ID.Empty() {
+		return ErrInvalidNFT(DefaultCodespace)
 	}
 	if msg.Sender.Empty() {
 		return sdk.ErrInvalidAddress("invalid sender address")
@@ -259,15 +260,15 @@ func NewMsgBuyNFT(sender, owner sdk.AccAddress, denom Denom, id TokenID,
 	}
 }
 
-// Route Implements Msg TODO: fix
-// func (msg MsgBuyNFT) Route() string { return RouterKey }
+// Route Implements Msg
+func (msg MsgBuyNFT) Route() string { return RouterKey }
 
 // Type Implements Msg
 func (msg MsgBuyNFT) Type() string { return "buy_nft" }
 
 // ValidateBasic Implements Msg.
 func (msg MsgBuyNFT) ValidateBasic() sdk.Error {
-	if strings.TrimSpace(msg.Denom) == "" {
+	if msg.Denom.TrimSpace() == "" {
 		return ErrInvalidCollection(DefaultCodespace)
 	}
 	if msg.Sender.Empty() {
@@ -277,7 +278,7 @@ func (msg MsgBuyNFT) ValidateBasic() sdk.Error {
 		return sdk.ErrInvalidCoins("invalid amount provided")
 	}
 	if msg.ID.Empty() {
-		return ErrInvalidNFT()
+		return ErrInvalidNFT(DefaultCodespace)
 	}
 	return nil
 }

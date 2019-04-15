@@ -8,12 +8,12 @@ import (
 
 // GenesisState is the bank state that must be provided at genesis.
 type GenesisState struct {
-	Collections map[Denom]Collection     `json:"collections"`
-	Owners      map[sdk.AccAddress]Owner `json:"owners"`
+	Collections map[Denom]Collection `json:"collections"`
+	Owners      map[string]Owner     `json:"owners"`
 }
 
 // NewGenesisState creates a new genesis state.
-func NewGenesisState(collections map[Denom]Collection, owners map[sdk.AccAddress]Owner) GenesisState {
+func NewGenesisState(collections map[Denom]Collection, owners map[string]Owner) GenesisState {
 	return GenesisState{
 		Collections: collections,
 		Owners:      owners,
@@ -22,7 +22,7 @@ func NewGenesisState(collections map[Denom]Collection, owners map[sdk.AccAddress
 
 // DefaultGenesisState returns a default genesis state
 func DefaultGenesisState() GenesisState {
-	return NewGenesisState(map[Denom]Collection{}, map[sdk.AccAddress]Owner{})
+	return NewGenesisState(map[Denom]Collection{}, map[string]Owner{})
 }
 
 // InitGenesis sets distribution information for genesis.
@@ -46,9 +46,9 @@ func ValidateGenesis(data GenesisState) error {
 	for denom, collection := range data.Collections {
 		var err sdk.Error
 		if strings.TrimSpace(string(denom)) == "" {
-			err := ErrInvalidNFT
+			err = ErrInvalidNFT(DefaultCodespace)
 		} else {
-			err := collection.ValidateBasic()
+			err = collection.ValidateBasic()
 		}
 		if err != nil {
 			return err

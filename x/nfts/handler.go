@@ -1,11 +1,13 @@
 package nfts
 
 import (
+	"fmt"
+
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/staking/keeper"
 )
 
-func NewHandler(k keeper.Keeper) sdk.Handler {
+// NewHandler routes the messages to the handlers
+func NewHandler(k Keeper) sdk.Handler {
 	return func(ctx sdk.Context, msg sdk.Msg) sdk.Result {
 		// NOTE msg already has validate basic run
 		switch msg := msg.(type) {
@@ -17,15 +19,15 @@ func NewHandler(k keeper.Keeper) sdk.Handler {
 			return handleMsgMintNFT(ctx, msg, k)
 		case MsgBurnNFT:
 			return handleMsgBurnNFT(ctx, msg, k)
-		case MsgBuyNFT:
-			return handleMsgBuyNFT(ctx, msg, k)
+		// case MsgBuyNFT:
+		// 	return handleMsgBuyNFT(ctx, msg, k)
 		default:
 			return sdk.ErrTxDecode("invalid message parse in NFT module").Result()
 		}
 	}
 }
 
-func handleMsgTransferNFT(ctx sdk.Context, msg MsgTransferNFT, k keeper.Keeper,
+func handleMsgTransferNFT(ctx sdk.Context, msg MsgTransferNFT, k Keeper,
 ) sdk.Result {
 
 	nft, err := k.GetNFT(ctx, msg.Denom, msg.ID)
@@ -34,32 +36,42 @@ func handleMsgTransferNFT(ctx sdk.Context, msg MsgTransferNFT, k keeper.Keeper,
 	}
 
 	if !nft.Owner.Equals(msg.Sender) {
-		return sdk.ErrInvalidAddress(ftm.Sprintf("%s is not the owner of NFT #%d", msg.Sender.String(), msg.ID))
+		return sdk.ErrInvalidAddress(fmt.Sprintf("%s is not the owner of NFT #%d", msg.Sender.String(), msg.ID)).Result()
 	}
 
 	// remove from previous owner
-	k.GetOwner(nft.Owner)
+	owner, found := k.GetOwner(ctx, nft.Owner)
+	if !found {
+		return ErrInvalidNFT(DefaultCodespace).Result()
+	}
+	owner.RemoveNFT(msg.Denom, msg.ID)
+	k.SetOwner(ctx, nft.Owner, owner)
+
+	// update NFT
+	nft.Owner = msg.Recipient
 
 	// add to new owner
+	k.AddToOwner(ctx, msg.Denom, msg.ID, nft)
 
-	err = k.SetNFT(ctx, msg.Denom, nft)
+	// save new NFT
+	err = k.SetNFT(ctx, msg.Denom, msg.ID, nft)
 	if err != nil {
 		return err.Result()
 	}
 
 	resTags := sdk.NewTags(
-		TagCategory, tags.TxCategory,
+		TagCategory, TxCategory,
 		TagSender, msg.Sender.String(),
 		TagRecipient, msg.Recipient.String(),
-		TagDenom, msg.Denom.String(),
-		TagNFTID, msg.ID,
+		TagDenom, string(msg.Denom),
+		TagNFTID, uint64(msg.ID),
 	)
 	return sdk.Result{
 		Tags: resTags,
 	}
 }
 
-func handleMsgEditNFTMetadata(ctx sdk.Context, msg MsgEditNFTMetadata, k keeper.Keeper,
+func handleMsgEditNFTMetadata(ctx sdk.Context, msg MsgEditNFTMetadata, k Keeper,
 ) sdk.Result {
 
 	nft, err := k.GetNFT(ctx, msg.Denom, msg.ID)
@@ -67,20 +79,21 @@ func handleMsgEditNFTMetadata(ctx sdk.Context, msg MsgEditNFTMetadata, k keeper.
 		return err.Result()
 	}
 
-	if !nft.Owner.Equals(msg.Sender) {
-		return sdk.ErrInvalidAddress(ftm.Sprintf("%s is not the owner of NFT #%d", msg.Sender.String(), msg.ID))
+	// Make sure msg sender (Owner) is actually the Owner of the NFT
+	if !nft.Owner.Equals(msg.Owner) {
+		return sdk.ErrInvalidAddress(fmt.Sprintf("%s is not the owner of NFT #%d", msg.Owner.String(), msg.ID)).Result()
 	}
 
 	nft = nft.EditMetadata(msg.Name, msg.Description, msg.Image, msg.TokenURI)
-	err = k.SetNFT(ctx, msg.Denom, nft)
+	err = k.SetNFT(ctx, msg.Denom, msg.ID, nft)
 	if err != nil {
 		return err.Result()
 	}
 
 	resTags := sdk.NewTags(
-		TagCategory, tags.TxCategory,
-		TagSender, msg.Owner.String(),
-		TagDenom, msg.Denom.String(),
+		TagCategory, TxCategory,
+		TagSender, string(msg.Owner),
+		TagDenom, string(msg.Denom),
 		TagNFTID, msg.ID,
 	)
 	return sdk.Result{
@@ -88,29 +101,45 @@ func handleMsgEditNFTMetadata(ctx sdk.Context, msg MsgEditNFTMetadata, k keeper.
 	}
 }
 
-func handleMsgMintNFT(ctx sdk.Context, msg MsgMintNFT, k keeper.Keeper,
+// TODO: move to separate Module?
+func handleMsgMintNFT(ctx sdk.Context, msg MsgMintNFT, k Keeper,
 ) sdk.Result {
 
-	collection, found := k.GetCollection(msg.Denom)
-	if !found {
-		collection = NewCollection(msg.Denom)
+	// make sure NFT with that ID and denom doesn't exist
+	exists := k.IsNFT(ctx, msg.Denom, msg.ID)
+	if exists {
+		return ErrInvalidMint(DefaultCodespace, fmt.Sprintf("%s NFT #%d already exists", msg.Denom, msg.ID)).Result()
 	}
 
-	nft = NewNFT(msg.ID)
+	// make sure collection exists, if not create it
+	_, found := k.GetCollection(ctx, msg.Denom)
+	if !found {
+		k.SetCollection(ctx, msg.Denom, NewCollection())
+	}
+
+	// make new NFT and set it
+	nft := NewNFT(msg.Recipient, msg.TokenURI, msg.Description, msg.Image, msg.Name)
+	err := k.SetNFT(ctx, msg.Denom, msg.ID, nft)
+	if err != nil {
+		return err.Result()
+	}
+
+	// add ne NFT to Owners
+	k.AddToOwner(ctx, msg.Denom, msg.ID, nft)
 
 	resTags := sdk.NewTags(
-		TagCategory, tags.TxCategory,
+		TagCategory, TxCategory,
 		TagSender, msg.Sender.String(),
-		TagRecipient, msg.Recipient.String(),
-		TagDenom, msg.Denom.String(),
-		TagNFTID, msg.ID,
+		TagRecipient, string(msg.Recipient),
+		TagDenom, string(msg.Denom),
+		TagNFTID, string(msg.ID),
 	)
 	return sdk.Result{
 		Tags: resTags,
 	}
 }
 
-func handleMsgBurnNFT(ctx sdk.Context, msg MsgBurnNFT, k keeper.Keeper,
+func handleMsgBurnNFT(ctx sdk.Context, msg MsgBurnNFT, k Keeper,
 ) sdk.Result {
 
 	nft, err := k.GetNFT(ctx, msg.Denom, msg.ID)
@@ -119,62 +148,74 @@ func handleMsgBurnNFT(ctx sdk.Context, msg MsgBurnNFT, k keeper.Keeper,
 	}
 
 	if !nft.Owner.Equals(msg.Sender) {
-		return sdk.ErrInvalidAddress(ftm.Sprintf("%s is not the owner of NFT #%d", msg.Sender.String(), msg.ID))
+		return sdk.ErrInvalidAddress(fmt.Sprintf("%s is not the owner of %s NFT #%d", msg.Sender.String(), msg.Denom, msg.ID)).Result()
 	}
 
-	k.BurnNFT(ctx, msg.Denom, msg.ID)
-
-	resTags := sdk.NewTags(
-		TagCategory, tags.TxCategory,
-		TagSender, msg.Sender.String(),
-		TagDenom, msg.Denom.String(),
-		TagNFTID, msg.ID,
-	)
-	return sdk.Result{
-		Tags: resTags,
-	}
-}
-
-func handleMsgBuyNFT(ctx sdk.Context, msg MsgBuyNFT, k keeper.Keeper,
-) sdk.Result {
-
-	nft, err := k.GetNFT(ctx, msg.Denom, msg.ID)
-	if err != nil {
-		return err.Result()
-	}
-
-	owner, found := k.GetOwner(nft.Owner)
+	// remove from owner
+	owner, found := k.GetOwner(ctx, nft.Owner)
 	if !found {
-		panic("%s should have an ownership relation with NFT %d", nft.Owner, msg.ID)
+		return ErrInvalidNFT(DefaultCodespace).Result()
 	}
-	owner[msg.Denom]
+	owner.RemoveNFT(msg.Denom, msg.ID)
+	k.SetOwner(ctx, nft.Owner, owner)
 
-	_, err = k.bk.SubtractCoins(msg.Sender, msg.Amount)
-	if err != nil {
-		return err.Result()
-	}
-	_, err = k.bk.AddCoins(nft.Owner, msg.Amount)
-	if err != nil {
-		return err.Result()
-	}
-
-	nft.Owner = msg.Sender
-
-	// TODO: add to new owners ownership
-
-	err = keepr.SetNFT(ctx, nft)
+	// remove actual NFT
+	err = k.BurnNFT(ctx, msg.Denom, msg.ID)
 	if err != nil {
 		return err.Result()
 	}
 
 	resTags := sdk.NewTags(
-		TagCategory, tags.TxCategory,
-		TagSender, msg.Sender.String(),
-		TagOwner, msg.Owner.String(),
-		TagDenom, msg.Denom.String(),
-		TagNFTID, msg.ID,
+		TagCategory, TxCategory,
+		TagSender, string(msg.Sender),
+		TagDenom, string(msg.Denom),
+		TagNFTID, string(msg.ID),
 	)
 	return sdk.Result{
 		Tags: resTags,
 	}
 }
+
+// func handleMsgBuyNFT(ctx sdk.Context, msg MsgBuyNFT, k Keeper,
+// ) sdk.Result {
+
+// 	nft, err := k.GetNFT(ctx, msg.Denom, msg.ID)
+// 	if err != nil {
+// 		return err.Result()
+// 	}
+
+// 	owner, found := k.GetOwner(ctx, nft.Owner)
+// 	if !found {
+// 		panic(fmt.Sprintf("%s should have an ownership relation with NFT %d", nft.Owner, msg.ID))
+// 	}
+// 	// owner[msg.Denom]
+
+// 	_, err = k.bk.SubtractCoins(msg.Sender, msg.Amount)
+// 	if err != nil {
+// 		return err.Result()
+// 	}
+// 	_, err = k.bk.AddCoins(nft.Owner, msg.Amount)
+// 	if err != nil {
+// 		return err.Result()
+// 	}
+
+// 	nft.Owner = msg.Sender
+
+// 	// TODO: add to new owners ownership
+
+// 	err = keepr.SetNFT(ctx, nft)
+// 	if err != nil {
+// 		return err.Result()
+// 	}
+
+// 	resTags := sdk.NewTags(
+// 		TagCategory, TxCategory,
+// 		TagSender, msg.Sender.String(),
+// 		TagOwner, msg.Owner.String(),
+// 		TagDenom, msg.Denom.String(),
+// 		TagNFTID, msg.ID,
+// 	)
+// 	return sdk.Result{
+// 		Tags: resTags,
+// 	}
+// }
