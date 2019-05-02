@@ -1,14 +1,16 @@
 package app
 
 import (
+	"encoding/json"
+
 	"github.com/tendermint/tendermint/libs/log"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/x/auth"
 	"github.com/cosmos/cosmos-sdk/x/bank"
 	"github.com/cosmos/cosmos-sdk/x/nft"
-	"github.com/okwme/cosmos-nft/x/cosmic"
 	"github.com/cosmos/cosmos-sdk/x/params"
+	"github.com/okwme/cosmos-nft/x/cosmic"
 
 	bam "github.com/cosmos/cosmos-sdk/baseapp"
 	sdk "github.com/cosmos/cosmos-sdk/types"
@@ -82,8 +84,8 @@ func NewCosmicApp(logger log.Logger, db dbm.DB) *cosmicApp {
 
 	// The nftKeeper is the Keeper from the nft module
 	// It handles interactions with the nftstore
-	app.nftKeeper = cosmic.NewKeeper(
-		app.keyNS,
+	app.nftKeeper = nft.NewKeeper(
+		app.keyNFT,
 		app.cdc,
 	)
 
@@ -94,12 +96,8 @@ func NewCosmicApp(logger log.Logger, db dbm.DB) *cosmicApp {
 	// Register the bank and nameservice routes here
 	app.Router().
 		AddRoute("bank", bank.NewHandler(app.bankKeeper)).
-		AddRoute("nameservice", nameservice.NewHandler(app.nsKeeper))
-
-	// The app.QueryRouter is the main query router where each module registers its routes
-	app.QueryRouter().
-		AddRoute("nameservice", nameservice.NewQuerier(app.nsKeeper)).
-		AddRoute("acc", auth.NewQuerier(app.accountKeeper))
+		AddRoute("nft", nft.NewHandler(app.nftKeeper)).
+		AddRoute("cosmic-nft", cosmic.NewHandler(app.nftKeeper))
 
 	// The initChainer handles translating the genesis.json file into initial state for the network
 	app.SetInitChainer(app.initChainer)
@@ -107,7 +105,7 @@ func NewCosmicApp(logger log.Logger, db dbm.DB) *cosmicApp {
 	app.MountStores(
 		app.keyMain,
 		app.keyAccount,
-		app.keyNS,
+		app.keyNFT,
 		app.keyFeeCollection,
 		app.keyParams,
 		app.tkeyParams,
@@ -119,4 +117,65 @@ func NewCosmicApp(logger log.Logger, db dbm.DB) *cosmicApp {
 	}
 
 	return app
+}
+
+// GenesisState represents chain state at the start of the chain. Any initial state (account balances) are stored here.
+type GenesisState struct {
+	NFTData  nft.GenesisState    `json:"nft"`
+	AuthData auth.GenesisState   `json:"auth"`
+	BankData bank.GenesisState   `json:"bank"`
+	Accounts []*auth.BaseAccount `json:"accounts"`
+}
+
+func (app *cosmicApp) initChainer(ctx sdk.Context, req abci.RequestInitChain) abci.ResponseInitChain {
+	stateJSON := req.AppStateBytes
+
+	genesisState := new(GenesisState)
+	err := app.cdc.UnmarshalJSON(stateJSON, genesisState)
+	if err != nil {
+		panic(err)
+	}
+
+	for _, acc := range genesisState.Accounts {
+		acc.AccountNumber = app.accountKeeper.GetNextAccountNumber(ctx)
+		app.accountKeeper.SetAccount(ctx, acc)
+	}
+
+	auth.InitGenesis(ctx, app.accountKeeper, app.feeCollectionKeeper, genesisState.AuthData)
+	bank.InitGenesis(ctx, app.bankKeeper, genesisState.BankData)
+	nft.InitGenesis(ctx, app.nftKeeper, genesisState.BankData)
+
+	return abci.ResponseInitChain{}
+}
+
+// ExportAppStateAndValidators does the things
+func (app *cosmicApp) ExportAppStateAndValidators() (appState json.RawMessage, validators []tmtypes.GenesisValidator, err error) {
+	ctx := app.NewContext(true, abci.Header{})
+	accounts := []*auth.BaseAccount{}
+
+	appendAccountsFn := func(acc auth.Account) bool {
+		account := &auth.BaseAccount{
+			Address: acc.GetAddress(),
+			Coins:   acc.GetCoins(),
+		}
+
+		accounts = append(accounts, account)
+		return false
+	}
+
+	app.accountKeeper.IterateAccounts(ctx, appendAccountsFn)
+
+	genState := GenesisState{
+		NFTData:  nft.ExportGenesis(),
+		AuthData: auth.DefaultGenesisState(),
+		BankData: bank.DefaultGenesisState(),
+		Accounts: accounts,
+	}
+
+	appState, err = codec.MarshalJSONIndent(app.cdc, genState)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return appState, validators, err
 }
