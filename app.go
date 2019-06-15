@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"os"
 
 	abci "github.com/tendermint/tendermint/abci/types"
 	cmn "github.com/tendermint/tendermint/libs/common"
@@ -26,16 +27,25 @@ import (
 
 const appName = "cosmic"
 
-var ModuleBasics = module.NewBasicManager(
-	genaccounts.AppModuleBasic{},
-	genutil.AppModuleBasic{},
-	auth.AppModuleBasic{},
-	bank.AppModuleBasic{},
-	params.AppModuleBasic{},
-	staking.AppModuleBasic{},
-	distr.AppModuleBasic{},
-	slashing.AppModuleBasic{},
-	nft.AppModuleBasic{},
+var (
+	// DefaultCLIHome is the default home directories for the application CLI
+	DefaultCLIHome = os.ExpandEnv("$HOME/.nftcli")
+
+	// DefaultNodeHome sets the folder where the applcation data and configuration will be stored
+	DefaultNodeHome = os.ExpandEnv("$HOME/.nftd")
+
+	// ModuleBasics is the module manager in charge of setting up basic module elements
+	ModuleBasics = module.NewBasicManager(
+		genaccounts.AppModuleBasic{},
+		genutil.AppModuleBasic{},
+		auth.AppModuleBasic{},
+		bank.AppModuleBasic{},
+		params.AppModuleBasic{},
+		staking.AppModuleBasic{},
+		distr.AppModuleBasic{},
+		slashing.AppModuleBasic{},
+		nft.AppModuleBasic{},
+	)
 )
 
 // MakeCodec generates the necessary codecs for Amino
@@ -246,6 +256,7 @@ func NewCosmicApp(logger log.Logger, db dbm.DB) *cosmicApp {
 // GenesisState represents chain state at the start of the chain. Any initial state (account balances) are stored here.
 type GenesisState map[string]json.RawMessage
 
+// NewDefaultGenesisState creates a new default genesis file
 func NewDefaultGenesisState() GenesisState {
 	return ModuleBasics.DefaultGenesis()
 }
