@@ -53,7 +53,7 @@ func HandleMsgMintNFTCustom(ctx sdk.Context, msg types.MsgMintNFT, k keeper.Keep
 
 	isTwilight := checkTwilight(ctx)
 
-	if !isTwilight {
+	if isTwilight {
 		return nft.HandleMsgMintNFT(ctx, msg, k)
 	}
 
