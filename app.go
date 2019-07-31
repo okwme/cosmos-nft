@@ -2,6 +2,7 @@ package app
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 
 	abci "github.com/tendermint/tendermint/abci/types"
@@ -19,6 +20,7 @@ import (
 	distr "github.com/cosmos/cosmos-sdk/x/distribution"
 	"github.com/cosmos/cosmos-sdk/x/genaccounts"
 	"github.com/cosmos/cosmos-sdk/x/genutil"
+	"github.com/cosmos/cosmos-sdk/x/mint"
 	"github.com/cosmos/cosmos-sdk/x/nft"
 	"github.com/cosmos/cosmos-sdk/x/params"
 	"github.com/cosmos/cosmos-sdk/x/slashing"
@@ -64,18 +66,17 @@ type cosmicApp struct {
 	cdc *codec.Codec
 
 	// Keys to access the substores
-	keyMain          *sdk.KVStoreKey
-	keyAccount       *sdk.KVStoreKey
-	keyFeeCollection *sdk.KVStoreKey
-	keySupply        *sdk.KVStoreKey
-	keyStaking       *sdk.KVStoreKey
-	tkeyStaking      *sdk.TransientStoreKey
-	keyDistr         *sdk.KVStoreKey
-	tkeyDistr        *sdk.TransientStoreKey
-	keyNFT           *sdk.KVStoreKey
-	keyParams        *sdk.KVStoreKey
-	tkeyParams       *sdk.TransientStoreKey
-	keySlashing      *sdk.KVStoreKey
+	keyMain     *sdk.KVStoreKey
+	keyAccount  *sdk.KVStoreKey
+	keySupply   *sdk.KVStoreKey
+	keyStaking  *sdk.KVStoreKey
+	tkeyStaking *sdk.TransientStoreKey
+	keyDistr    *sdk.KVStoreKey
+	tkeyDistr   *sdk.TransientStoreKey
+	keyNFT      *sdk.KVStoreKey
+	keyParams   *sdk.KVStoreKey
+	tkeyParams  *sdk.TransientStoreKey
+	keySlashing *sdk.KVStoreKey
 
 	// Keepers
 	accountKeeper  auth.AccountKeeper
@@ -142,12 +143,17 @@ func NewCosmicApp(logger log.Logger, db dbm.DB) *cosmicApp {
 		bank.DefaultCodespace,
 	)
 
-	basicModuleAccs := []string{auth.FeeCollectorName, distr.ModuleName}
-	minterModuleAccs := []string{}
-	burnerModuleAccs := []string{staking.BondedPoolName, staking.NotBondedPoolName}
+	maccPerms := map[string][]string{
+		auth.FeeCollectorName:     nil,
+		distr.ModuleName:          nil,
+		nft.ModuleName:            nil,
+		mint.ModuleName:           {supply.Minter},
+		staking.BondedPoolName:    {supply.Burner, supply.Staking},
+		staking.NotBondedPoolName: {supply.Burner, supply.Staking},
+	}
 
 	app.supplyKeeper = supply.NewKeeper(app.cdc, app.keySupply, app.accountKeeper,
-		app.bankKeeper, supply.DefaultCodespace, basicModuleAccs, minterModuleAccs, burnerModuleAccs)
+		app.bankKeeper, supply.DefaultCodespace, maccPerms)
 
 	// The staking keeper
 	stakingKeeper := staking.NewKeeper(
@@ -237,11 +243,20 @@ func NewCosmicApp(logger log.Logger, db dbm.DB) *cosmicApp {
 			auth.DefaultSigVerificationGasConsumer,
 		),
 	)
-
+	fmt.Println("keyMain", app.keyMain.Name())
+	fmt.Println("keyAccount", app.keyAccount.Name())
+	fmt.Println("keySupply", app.keySupply.Name())
+	fmt.Println("keyStaking", app.keyStaking.Name())
+	fmt.Println("tkeyStaking", app.tkeyStaking.Name())
+	fmt.Println("keyDistr", app.keyDistr.Name())
+	fmt.Println("keySlashing", app.keySlashing.Name())
+	fmt.Println("keyNFT", app.keyNFT.Name())
+	fmt.Println("keyParams", app.keyParams.Name())
+	fmt.Println("tkeyParams", app.tkeyParams.Name())
 	app.MountStores(
 		app.keyMain,
 		app.keyAccount,
-		app.keyFeeCollection,
+		app.keySupply,
 		app.keyStaking,
 		app.tkeyStaking,
 		app.keyDistr,

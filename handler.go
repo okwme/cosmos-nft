@@ -5,8 +5,6 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/nft"
-	"github.com/cosmos/cosmos-sdk/x/nft/keeper"
-	"github.com/cosmos/cosmos-sdk/x/nft/types"
 )
 
 // OverrideNFTModule overrides the NFT module for custom handlers
@@ -29,16 +27,16 @@ func NewOverrideNFTModule(appModule nft.AppModule, keeper nft.Keeper) OverrideNF
 }
 
 // CustomNFTHandler routes the messages to the handlers
-func CustomNFTHandler(k keeper.Keeper) sdk.Handler {
+func CustomNFTHandler(k nft.Keeper) sdk.Handler {
 	return func(ctx sdk.Context, msg sdk.Msg) sdk.Result {
 		switch msg := msg.(type) {
-		case types.MsgTransferNFT:
+		case nft.MsgTransferNFT:
 			return nft.HandleMsgTransferNFT(ctx, msg, k)
-		case types.MsgEditNFTMetadata:
+		case nft.MsgEditNFTMetadata:
 			return nft.HandleMsgEditNFTMetadata(ctx, msg, k)
-		case types.MsgMintNFT:
+		case nft.MsgMintNFT:
 			return HandleMsgMintNFTCustom(ctx, msg, k)
-		case types.MsgBurnNFT:
+		case nft.MsgBurnNFT:
 			return nft.HandleMsgBurnNFT(ctx, msg, k)
 		default:
 			errMsg := fmt.Sprintf("unrecognized nft message type: %T", msg)
@@ -48,7 +46,7 @@ func CustomNFTHandler(k keeper.Keeper) sdk.Handler {
 }
 
 // HandleMsgMintNFTCustom handles MsgMintNFT
-func HandleMsgMintNFTCustom(ctx sdk.Context, msg types.MsgMintNFT, k keeper.Keeper,
+func HandleMsgMintNFTCustom(ctx sdk.Context, msg nft.MsgMintNFT, k nft.Keeper,
 ) sdk.Result {
 
 	isTwilight := checkTwilight(ctx)
