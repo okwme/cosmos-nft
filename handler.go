@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	"github.com/cosmos/cosmos-sdk/x/nft"
+	"github.com/cosmos/modules/incubator/nft"
 )
 
 // OverrideNFTModule overrides the NFT module for custom handlers
